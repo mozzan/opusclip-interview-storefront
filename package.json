@@ -1,0 +1,15 @@
+{
+  "name": "storefront-checkout-interview",
+  "private": true,
+  "type": "module",
+  "description": "Acceptance tests for the Pinecone Supply Co. storefront exercise",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/acceptance/*.test.mjs",
+    "test:l1": "node --test --test-concurrency=1 --test-name-pattern=\"^L1 \" tests/acceptance/*.test.mjs",
+    "test:l2": "node --test --test-concurrency=1 --test-name-pattern=\"^L2 \" tests/acceptance/*.test.mjs",
+    "test:l3": "node --test --test-concurrency=1 --test-name-pattern=\"^L3 \" tests/acceptance/*.test.mjs"
+  }
+}

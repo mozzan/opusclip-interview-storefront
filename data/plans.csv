@@ -1,0 +1,6 @@
+plan_id,name,price_cents,currency,interval,active
+basic-monthly,Basic Monthly,900,USD,month,true
+pro-monthly,Pro Monthly,1900,USD,month,true
+pro-annual,Pro Annual,1900,USD,year,true
+team-monthly,Team Monthly,49.00,USD,month,true
+starter-2024,Starter (2024),500,USD,month,false

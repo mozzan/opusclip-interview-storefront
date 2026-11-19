@@ -1,0 +1,45 @@
+x-payment-env: &payment-env
+  PAYMENT_API_KEY: ${PAYMENT_API_KEY:-sk_test_pinecone_local}
+  PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-whsec_test_pinecone_local}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      retries: 30
+
+  backend:
+    build: { context: ., args: { SERVICE: backend } }
+    environment:
+      <<: *payment-env
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/backend?sslmode=disable
+      PAYMENT_URL: http://payment-service:4242
+      DATA_DIR: /data
+      LEGACY_WEBHOOK_SECRET: ${LEGACY_WEBHOOK_SECRET:-whsec_legacy_pinecone_2025}
+    volumes:
+      - ./data:/data:ro
+    ports: ["4000:4000"]
+    depends_on: { postgres: { condition: service_healthy } }
+
+  payment-service:
+    build: { context: ., args: { SERVICE: payment-service } }
+    environment:
+      <<: *payment-env
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/payments?sslmode=disable
+      WEBHOOK_URL: http://backend:4000/webhooks/payments
+    ports: ["4242:4242"]
+    depends_on: { postgres: { condition: service_healthy } }
+
+  frontend:
+    build: { context: ., args: { SERVICE: frontend } }
+    environment:
+      BACKEND_URL: http://backend:4000
+      PAYMENT_URL: http://payment-service:4242
+    ports: ["${FRONTEND_PORT:-3000}:3000"]
+    depends_on: [backend, payment-service]

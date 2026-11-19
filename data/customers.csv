@@ -1,0 +1,20 @@
+customer_id,email,full_name,legacy_subscription_status,legacy_plan_id,created_at
+cust_001,avery.chen@example.com,Avery Chen,active,pro-monthly,2026-03-04T10:00:00Z
+cust_002,blake.morgan@example.com,Blake Morgan,active,basic-monthly,2026-04-11T09:30:00Z
+cust_003,carmen.diaz@example.com,Carmen Diaz,active,pro-annual,2026-01-20T14:15:00Z
+cust_004,devon.price@example.com,Devon Price,active,basic-monthly,2026-05-02T08:45:00Z
+cust_005,emery.walsh@example.com,Emery Walsh,active,pro-monthly,2026-02-14T19:00:00Z
+cust_006,farah.haddad@example.com,Farah Haddad,active,pro-monthly,2026-06-30T12:00:00Z
+cust_007,Priya.Shah@example.com,Priya Shah,none,,2026-03-18T16:40:00Z
+cust_008,gabriel.okafor@example.com,Gabriel Okafor,past_due,pro-monthly,2026-07-07T07:07:00Z
+cust_009,hana.suzuki@example.com,Hana Suzuki,active,pro-monthly,2026-08-21T11:11:00Z
+cust_010,isaac.berg@example.com,Isaac Berg,active,pro-monthly,2026-05-25T13:20:00Z
+cust_011,jules.martin@example.com,Jules Martin,active,pro-monthly,2026-02-02T10:10:00Z
+cust_012,kai.nakamura@example.com,Kai Nakamura,active,pro-montly,2026-04-04T04:04:00Z
+cust_013,lena.fischer@example.com,Lena Fischer,active,basic-monthly,05/06/2026
+cust_014,milo.rossi@example.com,Milo Rossi,canceled,pro-monthly,2026-01-09T09:09:00Z
+cust_015,nora.quinn@example.com,Nora Quinn,active,basic-monthly,2026-09-01T12:00:00Z
+cust_016,pat.lee@,Pat Lee,none,,2026-09-15T15:15:00Z
+cust_017,rae.kim@example.com,Rae Kim,none,,2026-10-01T10:00:00Z
+cust_018,quinn.adams@example.com,Quinn Adams,active,team-monthly,2026-06-06T06:06:00Z
+cust_019,priya.shah@example.com ,Priya Shah,active,pro-monthly,2026-09-10T09:00:00Z

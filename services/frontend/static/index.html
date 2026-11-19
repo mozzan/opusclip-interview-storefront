@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinecone Supply Co.</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; color: #1f2a1f; background: #fafaf7; }
+  nav button { margin-right: 6px; }
+  section { display: none; } section.on { display: block; }
+  table { border-collapse: collapse; width: 100%; } td, th { border-bottom: 1px solid #ddd; padding: 6px; text-align: left; vertical-align: top; }
+  input, select, button { font: inherit; padding: 4px 8px; margin: 2px 0; }
+  .ok { color: #1a7f37; font-weight: 600; } .bad { color: #b42318; font-weight: 600; }
+  pre { background: #eee; padding: 8px; overflow: auto; white-space: pre-wrap; }
+  form label { display: block; margin: 4px 0; }
+</style>
+</head>
+<body>
+<h1>🌲 Pinecone Supply Co.</h1>
+<nav>
+  <button data-tab="shop">Shop</button><button data-tab="cart">Cart &amp; checkout</button>
+  <button data-tab="subscribe">Subscribe</button><button data-tab="admin">Admin</button>
+</nav>
+
+<section id="shop"><h2>Shop</h2><table id="products"></table></section>
+
+<section id="cart">
+  <h2>Cart</h2><table id="cartTable"></table><p>Total: <b id="cartTotal">$0.00</b></p>
+  <form id="checkoutForm">
+    <label>Email <input name="email" type="email" required></label>
+    <label>Card <input name="card" value="4242 4242 4242 4242" required></label>
+    <button>Pay</button>
+  </form>
+  <p id="checkoutResult"></p>
+</section>
+
+<section id="subscribe">
+  <h2>Membership</h2>
+  <form id="subForm">
+    <label>Plan <select name="plan" id="plans"></select></label>
+    <label>Email <input name="email" type="email" required></label>
+    <label>Card <input name="card" value="4242 4242 4242 4242" required></label>
+    <button>Subscribe</button>
+  </form>
+  <p id="subResult"></p>
+</section>
+
+<section id="admin">
+  <h2>Add product</h2>
+  <form id="addForm">
+    <label>SKU <input name="sku" required></label>
+    <label>Name <input name="name" required></label>
+    <label>Description <input name="description"></label>
+    <label>Category <input name="category"></label>
+    <label>Price (cents) <input name="price_cents" type="number" min="1" required></label>
+    <label>Inventory <input name="inventory" type="number" min="0" required></label>
+    <button>Add</button> <span id="addResult"></span>
+  </form>
+  <h2>Restock</h2>
+  <form id="restockForm">
+    <label>SKU <input name="sku" required></label>
+    <label>Quantity <input name="quantity" type="number" min="1" required></label>
+    <button>Restock</button> <span id="restockResult"></span>
+  </form>
+  <h2>Import report</h2><div id="report"></div>
+</section>
+
+<script>
+const B = '/api/backend', P = '/api/payment';
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toFixed(2);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function api(path, opts = {}) {
+  const res = await fetch(path, { ...opts, headers: { 'content-type': 'application/json' }, body: opts.body && JSON.stringify(opts.body) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error?.message || res.statusText);
+  return json;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function poll(fn, done, tries = 30) {
+  for (let i = 0; i < tries; i++) { const v = await fn(); if (done(v)) return v; await sleep(500); }
+  return fn();
+}
+
+const cart = new Map(); // sku -> {product, qty}
+
+function show(tab) {
+  document.querySelectorAll('section').forEach((s) => s.classList.toggle('on', s.id === tab));
+  ({ shop: loadProducts, cart: renderCart, subscribe: loadPlans, admin: loadReport })[tab]();
+}
+document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => show(b.dataset.tab)));
+
+async function loadProducts() {
+  const list = await api(B + '/products');
+  $('products').innerHTML = '<tr><th>Product</th><th>Price</th><th>Stock</th><th></th></tr>' + list.map((p) =>
+    `<tr><td><b>${esc(p.name)}</b><br><small>${esc(p.sku)} · ${esc(p.category)}</small></td><td>${money(p.price_cents)}</td>
+     <td>${p.inventory}</td><td><button ${p.inventory ? '' : 'disabled'} data-sku="${esc(p.sku)}">Add to cart</button></td></tr>`).join('');
+  $('products').querySelectorAll('button').forEach((b) => (b.onclick = () => {
+    const p = list.find((x) => x.sku === b.dataset.sku);
+    const line = cart.get(p.sku) || { product: p, qty: 0 };
+    line.qty++; cart.set(p.sku, line); b.textContent = `In cart (${line.qty})`;
+  }));
+}
+
+function renderCart() {
+  let total = 0;
+  $('cartTable').innerHTML = '<tr><th>Product</th><th>Qty</th><th>Subtotal</th></tr>' + [...cart.values()].map(({ product, qty }) => {
+    total += product.price_cents * qty;
+    return `<tr><td>${esc(product.name)}</td><td>${qty}</td><td>${money(product.price_cents * qty)}</td></tr>`;
+  }).join('');
+  $('cartTotal').textContent = money(total);
+}
+
+$('checkoutForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target), out = $('checkoutResult');
+  if (!cart.size) return (out.textContent = 'Cart is empty.');
+  try {
+    out.textContent = 'Placing order…';
+    const order = await api(B + '/orders', { method: 'POST', body: {
+      customer_email: f.get('email'), items: [...cart.values()].map(({ product, qty }) => ({ sku: product.sku, quantity: qty })) } });
+    out.textContent = `Order ${order.order_id}: ${money(order.amount_cents)}. Paying…`;
+    const pay = await api(`${P}/payments/${order.payment.id}/confirm`, { method: 'POST',
+      body: { client_secret: order.payment.client_secret, card_number: f.get('card') } });
+    const final = await poll(() => api(`${B}/orders/${order.order_id}`), (o) => o.status !== 'pending_payment');
+    const good = final.status === 'paid';
+    out.innerHTML = `Order ${esc(order.order_id)}: <span class="${good ? 'ok' : 'bad'}">${esc(final.status)}</span>` +
+      (pay.failure_reason ? ` (${esc(pay.failure_reason)})` : '');
+    if (good) { cart.clear(); renderCart(); }
+  } catch (err) { out.innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+};
+
+async function loadPlans() {
+  const plans = await api(B + '/plans');
+  $('plans').innerHTML = plans.map((p) => `<option value="${esc(p.plan_id)}">${esc(p.name)}: ${money(p.price_cents)}/${p.interval}</option>`).join('');
+}
+
+$('subForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target), out = $('subResult');
+  try {
+    const sub = await api(B + '/subscriptions', { method: 'POST', body: { customer_email: f.get('email'), plan_id: f.get('plan') } });
+    out.innerHTML = `Status: <b>${sub.status}</b>`;
+    await api(`${P}/payments/${sub.payment.id}/confirm`, { method: 'POST',
+      body: { client_secret: sub.payment.client_secret, card_number: f.get('card') } });
+    const url = `${B}/customers/${encodeURIComponent(sub.customer_email)}/subscription`;
+    const final = await poll(() => api(url), (s) => s.status !== 'pending');
+    out.innerHTML = `Status: <b>pending</b> → <span class="${final.status === 'active' ? 'ok' : 'bad'}">${esc(final.status)}</span>`;
+  } catch (err) { out.innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+};
+
+const num = (v) => (v === '' ? undefined : Number(v));
+$('addForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  try {
+    const p = await api(B + '/products', { method: 'POST', body: { ...f, currency: 'USD', price_cents: num(f.price_cents), inventory: num(f.inventory) } });
+    $('addResult').innerHTML = `<span class="ok">Added ${esc(p.sku)}</span>`; e.target.reset();
+  } catch (err) { $('addResult').innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+};
+$('restockForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  try {
+    const p = await api(`${B}/products/${encodeURIComponent(f.sku)}/restock`, { method: 'POST', body: { quantity: num(f.quantity) } });
+    $('restockResult').innerHTML = `<span class="ok">${esc(p.sku)} now has ${p.inventory}</span>`;
+  } catch (err) { $('restockResult').innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+};
+
+async function loadReport() {
+  const r = await api(B + '/admin/import-report');
+  $('report').innerHTML = Object.entries(r).map(([name, s]) => `
+    <h3>${name}: ${s.imported} of ${s.rows_read} imported, ${s.rejected.length} rejected</h3>
+    <table><tr><th>Line</th><th>ID</th><th>Reason</th></tr>${s.rejected.map((x) =>
+      `<tr><td>${x.line}</td><td>${esc(x.sku || x.plan_id)}</td><td>${esc(x.reason)}</td></tr>`).join('')}</table>
+    ${s.warnings.length ? `<p><b>Warnings</b></p><ul>${s.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}`).join('');
+}
+
+show('shop');
+</script>
+</body>
+</html>
