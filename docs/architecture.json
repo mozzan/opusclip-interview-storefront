@@ -1,0 +1,256 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Pinecone Storefront Architecture",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "checkout-path",
+        "label": "Checkout path",
+        "focus": [
+          "browser",
+          "frontend",
+          "backend",
+          "payment",
+          "backenddb"
+        ],
+        "note": "Order is priced by the backend, paid by card at the payment service, settled by webhook."
+      },
+      {
+        "id": "webhooks",
+        "label": "Signed webhooks",
+        "focus": [
+          "payment",
+          "backend",
+          "backenddb"
+        ],
+        "note": "HMAC over raw body, 300 s tolerance, event id dedup in webhook_events."
+      },
+      {
+        "id": "import",
+        "label": "Import and migration",
+        "focus": [
+          "data",
+          "backend",
+          "backenddb"
+        ],
+        "note": "CSV catalog import at startup; L3 legacy replay on demand."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "external",
+      "label": "Browser",
+      "sublabel": "shop / admin",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "frontend",
+      "sublabel": "Go :3000",
+      "pos": [
+        270,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "proxy /api/*"
+    },
+    {
+      "id": "backend",
+      "type": "backend",
+      "label": "backend",
+      "sublabel": "Go :4000",
+      "pos": [
+        540,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "backenddb",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "db: backend",
+      "pos": [
+        820,
+        300
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "payment",
+      "type": "backend",
+      "label": "payment-service",
+      "sublabel": "Go :4242",
+      "pos": [
+        540,
+        100
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "fake processor"
+    },
+    {
+      "id": "paydb",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "db: payments",
+      "pos": [
+        820,
+        100
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "data",
+      "type": "external",
+      "label": "data/",
+      "sublabel": "CSV + JSONL",
+      "pos": [
+        540,
+        500
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "read-only"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "docker compose",
+      "wraps": [
+        "frontend",
+        "backend",
+        "backenddb",
+        "payment",
+        "paydb"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browse",
+      "from": "browser",
+      "to": "frontend",
+      "label": "HTTP",
+      "variant": "emphasis"
+    },
+    {
+      "id": "proxy-backend",
+      "from": "frontend",
+      "to": "backend",
+      "label": "orders, plans",
+      "variant": "emphasis"
+    },
+    {
+      "id": "card",
+      "from": "frontend",
+      "to": "payment",
+      "label": "card + client_secret",
+      "variant": "security",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "create-payment",
+      "from": "backend",
+      "to": "payment",
+      "label": "API key",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [
+        566,
+        232
+      ]
+    },
+    {
+      "id": "webhook",
+      "from": "payment",
+      "to": "backend",
+      "label": "signed webhook",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        674,
+        232
+      ]
+    },
+    {
+      "id": "backend-sql",
+      "from": "backend",
+      "to": "backenddb",
+      "label": "SQL"
+    },
+    {
+      "id": "payment-sql",
+      "from": "payment",
+      "to": "paydb",
+      "label": "SQL"
+    },
+    {
+      "id": "import",
+      "from": "data",
+      "to": "backend",
+      "label": "import",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Card data",
+      "items": [
+        "Card number goes browser \u2192 payment-service only",
+        "Backend never sees it; stores payment id"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Webhooks",
+      "items": [
+        "HMAC-SHA256 over raw body, 300 s window",
+        "Event id dedup makes duplicates no-ops"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "State",
+      "items": [
+        "One Postgres, two databases, one per service",
+        "Stock drops only when an order is paid"
+      ]
+    }
+  ]
+}
