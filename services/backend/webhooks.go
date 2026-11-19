@@ -21,13 +21,13 @@ type event struct {
 	Type    string `json:"type"`
 	Created int64  `json:"created"`
 	Data    struct {
-		PaymentID     string            `json:"payment_id"`
-		Status        string            `json:"status"`
-		AmountCents   int64             `json:"amount_cents"`
-		Currency      string            `json:"currency"`
-		Metadata      map[string]any    `json:"metadata"`
-		CustomerEmail string            `json:"customer_email"`
-		PlanID        string            `json:"plan_id"`
+		PaymentID     string         `json:"payment_id"`
+		Status        string         `json:"status"`
+		AmountCents   int64          `json:"amount_cents"`
+		Currency      string         `json:"currency"`
+		Metadata      map[string]any `json:"metadata"`
+		CustomerEmail string         `json:"customer_email"`
+		PlanID        string         `json:"plan_id"`
 	} `json:"data"`
 }
 

@@ -220,7 +220,9 @@ func LoadPlans(r io.Reader) ([]Plan, Section, error) {
 	seen := map[string]bool{}
 	n, err := csvRows(r, func(line int, col func(string) string, fieldErr error) {
 		id := strings.TrimSpace(col("plan_id"))
-		reject := func(reason string) { sec.Rejected = append(sec.Rejected, Rejection{Line: line, PlanID: id, Reason: reason}) }
+		reject := func(reason string) {
+			sec.Rejected = append(sec.Rejected, Rejection{Line: line, PlanID: id, Reason: reason})
+		}
 		if fieldErr != nil {
 			reject(fieldErr.Error())
 			return

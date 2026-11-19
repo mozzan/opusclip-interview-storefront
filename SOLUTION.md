@@ -4,7 +4,7 @@
 
 ```bash
 docker compose up --build          # postgres + backend :4000 + payment-service :4242 + frontend :3000
-npm test                           # acceptance tests (L1 + L2 pass, L3 skipped)
+npm test                           # acceptance tests: 54/54 pass (L1, L2, L3)
 ```
 
 If port 3000 is taken: `FRONTEND_PORT=3001 docker compose up --build`, then `FRONTEND_URL=http://localhost:3001 npm test`.
@@ -69,19 +69,41 @@ These are import calls to confirm with the store owner. All of them show up in `
 
 ## How I checked the work
 
-- `npm test`: 51 pass, 0 fail, 3 skipped (L3).
+- `npm test`: 54 pass, 0 fail (L1, L2, L3).
 - `go test ./...`: signature cases (wrong secret, tampered body, stale, malformed). The import runs against the real
   `data/` files: it checks row counts, each rejection above, the duplicate-SKU winner, normalization, the multiline
   description, and that GIFT-CARD-100 keeps inventory 50.
 - I read the import report by hand against the CSVs.
 
+## L3 legacy migration
+
+- `POST /admin/migrations/legacy` imports `customers.csv`, then replays `legacy_payment_events.jsonl`:
+  1. Verify `x-legacy-signature` with `LEGACY_WEBHOOK_SECRET` over the raw `body` string, with no time tolerance.
+  2. Sort by `created`.
+  3. Apply in one transaction, guarded by an advisory lock.
+- **Events are the source of truth for status.** The old store's `legacy_subscription_status` is only compared, and
+  each disagreement becomes a warning in the customer report. Each customer gets one migrated subscription
+  (`sub_legacy_<email>`). A succeeded payment sets its plan and current payment. A refund cancels it only if it
+  refunds the current payment.
+- **Re-runs:** event ids go into the same `webhook_events` table, so a second run skips every event as already
+  processed and leaves the state unchanged.
+- **Skipped deliveries, each with a reason:**
+  - duplicate deliveries `dlv_0008` and `dlv_0024`
+  - forged signatures `dlv_0012` (Gabriel's "success" → stays `payment_failed`) and `dlv_0021` (Lena's pro-annual)
+  - wrong amounts: Hana paid 900 for pro-monthly; Isaac paid in EUR
+  - an unknown customer
+  - `team-monthly`, which wasn't imported
+- **Customers:** `pat.lee@` is rejected as an invalid email. `priya.shah@example.com ` duplicates `Priya.Shah@…`
+  (emails are not case-sensitive).
+- **Open question for the owner:** Carmen paid **19000** for `pro-annual`, which matches finance's 10× rule. That's
+  more evidence that `pro-annual` should be 19000, not 1900 as in plans.csv. With the CSV price as written, her payment
+  doesn't match the plan, so she migrates as `none`. Fixing the plan price would make her `active`.
+  Quinn's 4900 for `team-monthly` likewise suggests the `49.00` in plans.csv meant 4900 cents.
+- Jules Martin is `active` in the old store but has no payment events, so they migrate as `none`. Check with the owner.
+
 ## Known gaps and next steps
 
-- **L3 legacy migration is not built.** The design is ready for it:
-  1. Verify each delivery with `LEGACY_WEBHOOK_SECRET` and no time tolerance.
-  2. Sort by `created`.
-  3. Map `customer_email` + `plan_id` to a subscription.
-  4. Replay through the same `webhook_events` dedup and the same `nextSubscriptionStatus`, which makes a re-run safe.
+
 - **Overselling:** if stock runs out between order creation and payment, the paid order is kept and the oversell is
   logged rather than going negative. A real store would reserve stock or refund automatically.
 - **Payment-service outage:** if creating the payment fails, the order is left `pending_payment` with no payment and

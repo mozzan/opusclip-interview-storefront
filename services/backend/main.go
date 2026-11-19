@@ -45,6 +45,7 @@ type server struct {
 	apiKey        string
 	webhookSecret string
 	dataDir       string
+	legacySecret  string
 
 	mu     sync.Mutex
 	report map[string]Section
@@ -53,11 +54,12 @@ type server struct {
 func main() {
 	ctx := context.Background()
 	s := &server{
-		db:            httpx.ConnectDB(ctx, httpx.Env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/backend?sslmode=disable"), schema),
+		db:            httpx.ConnectDB(ctx, httpx.Env("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/backend?sslmode=disable"), schema+migrationSchema),
 		paymentURL:    httpx.Env("PAYMENT_URL", "http://localhost:4242"),
 		apiKey:        httpx.Env("PAYMENT_API_KEY", "sk_test_pinecone_local"),
 		webhookSecret: httpx.Env("PAYMENT_WEBHOOK_SECRET", "whsec_test_pinecone_local"),
 		dataDir:       httpx.Env("DATA_DIR", "data"),
+		legacySecret:  httpx.Env("LEGACY_WEBHOOK_SECRET", "whsec_legacy_pinecone_2025"),
 	}
 	if err := s.importCatalog(ctx); err != nil {
 		log.Fatalf("import: %v", err)
@@ -78,6 +80,7 @@ func main() {
 	mux.HandleFunc("POST /subscriptions", s.createSubscription)
 	mux.HandleFunc("GET /customers/{email}/subscription", s.getSubscription)
 	mux.HandleFunc("POST /webhooks/payments", s.webhook)
+	mux.HandleFunc("POST /admin/migrations/legacy", s.migrateLegacy)
 
 	addr := ":" + httpx.Env("PORT", "4000")
 	log.Printf("backend listening on %s", addr)
